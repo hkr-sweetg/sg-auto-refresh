@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Custom Auto Refresh</title>
+
+  <!-- Tableau Extensions API (latest v1) -->
+  <script src="https://extensions.tableauusercontent.com/resources/tableau.extensions.1.latest.min.js"></script>
+
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Segoe UI', Arial, sans-serif;
+      background: #f0f4f8;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+    }
+
+    .card {
+      background: #ffffff;
+      border-radius: 10px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+      padding: 28px 32px;
+      width: 320px;
+      text-align: center;
+    }
+
+    h1 {
+      font-size: 17px;
+      color: #2c3e50;
+      margin-bottom: 6px;
+      letter-spacing: 0.5px;
+    }
+
+    .subtitle {
+      font-size: 12px;
+      color: #7f8c8d;
+      margin-bottom: 20px;
+    }
+
+    /* Circular countdown ring */
+    .ring-wrapper {
+      position: relative;
+      width: 110px;
+      height: 110px;
+      margin: 0 auto 22px;
+    }
+
+    .ring-wrapper svg {
+      transform: rotate(-90deg);
+    }
+
+    .ring-bg { fill: none; stroke: #ecf0f1; stroke-width: 8; }
+    .ring-fill {
+      fill: none;
+      stroke: #3498db;
+      stroke-width: 8;
+      stroke-linecap: round;
+      transition: stroke-dashoffset 0.9s linear;
+    }
+
+    .ring-text {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      font-size: 28px;
+      font-weight: 700;
+      color: #2c3e50;
+    }
+
+    /* Settings row */
+    .setting-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+    }
+
+    .setting-row label {
+      font-size: 13px;
+      color: #555;
+      text-align: left;
+    }
+
+    .setting-row input[type="number"] {
+      width: 80px;
+      padding: 6px 8px;
+      font-size: 14px;
+      border: 1px solid #bdc3c7;
+      border-radius: 5px;
+      text-align: center;
+    }
+
+    /* Buttons */
+    .btn-row {
+      display: flex;
+      gap: 8px;
+      margin-top: 16px;
+    }
+
+    button {
+      flex: 1;
+      padding: 9px 6px;
+      font-size: 13px;
+      font-weight: 600;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+
+    #btnStart  { background: #27ae60; color: #fff; }
+    #btnStart:hover  { background: #219150; }
+    #btnStop   { background: #e74c3c; color: #fff; }
+    #btnStop:hover   { background: #c0392b; }
+    #btnNow    { background: #2980b9; color: #fff; }
+    #btnNow:hover    { background: #2471a3; }
+
+    /* Last refresh row */
+    .last-refresh-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: #f8f9fa;
+      border: 1px solid #e9ecef;
+      border-radius: 6px;
+      padding: 7px 12px;
+      margin-top: 14px;
+    }
+    .last-refresh-row .lr-label {
+      font-size: 11px;
+      color: #7f8c8d;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+    }
+    .last-refresh-row .lr-value {
+      font-size: 12px;
+      color: #2c3e50;
+      font-weight: 700;
+    }
+
+    /* Status bar */
+    #status {
+      margin-top: 8px;
+      font-size: 12px;
+      color: #7f8c8d;
+      min-height: 18px;
+    }
+
+    .badge {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 20px;
+      font-size: 11px;
+      font-weight: 700;
+      margin-bottom: 8px;
+    }
+    .badge-running { background: #d5f5e3; color: #1e8449; }
+    .badge-stopped { background: #fdebd0; color: #a04000; }
+    .badge-init    { background: #d6eaf8; color: #1a5276; }
+  </style>
+</head>
+<body>
+<div class="card">
+  <h1>⟳ Custom Auto Refresh</h1>
+  <p class="subtitle">Sweetgreen Dashboard Refresh</p>
+
+  <!-- Circular countdown -->
+  <div class="ring-wrapper">
+    <svg viewBox="0 0 110 110" width="110" height="110">
+      <circle class="ring-bg" cx="55" cy="55" r="46"/>
+      <circle class="ring-fill" id="ringFill" cx="55" cy="55" r="46"
+              stroke-dasharray="289" stroke-dashoffset="0"/>
+    </svg>
+    <div class="ring-text" id="countdownDisplay">60</div>
+  </div>
+
+  <span class="badge badge-init" id="badge">Initializing</span>
+
+  <!-- Interval setting -->
+  <div class="setting-row">
+    <label for="intervalInput">Refresh interval (seconds)</label>
+    <input type="number" id="intervalInput" value="60" min="5" max="86400"/>
+  </div>
+
+  <!-- Control buttons -->
+  <div class="btn-row">
+    <button id="btnStart" onclick="startTimer()">▶ Start</button>
+    <button id="btnStop"  onclick="stopTimer()">■ Stop</button>
+    <button id="btnNow"   onclick="refreshNow()">↺ Now</button>
+  </div>
+
+  <!-- Last refresh time -->
+  <div class="last-refresh-row">
+    <span class="lr-label">Last Refresh</span>
+    <span class="lr-value" id="lastRefreshTime">—</span>
+  </div>
+
+  <div id="status">Waiting for Tableau…</div>
+</div>
+
+<script>
+  // ─── State ────────────────────────────────────────────────────────────────
+  let dashboard      = null;
+  let timerHandle    = null;
+  let currentTick    = 60;
+  let intervalSecs   = 60;
+  const CIRCUMFERENCE = 2 * Math.PI * 46; // matches r="46"
+
+  // ─── UI helpers ──────────────────────────────────────────────────────────
+  const $ = id => document.getElementById(id);
+
+  function setStatus(msg)  { $('status').textContent = msg; }
+
+  function setLastRefresh() {
+    const now  = new Date();
+    const time = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    $('lastRefreshTime').textContent = time;
+  }
+
+  function setBadge(state) {
+    const b = $('badge');
+    b.className = 'badge';
+    if (state === 'running') { b.classList.add('badge-running'); b.textContent = '● Running'; }
+    else if (state === 'stopped') { b.classList.add('badge-stopped'); b.textContent = '■ Stopped'; }
+    else { b.classList.add('badge-init'); b.textContent = 'Initializing'; }
+  }
+
+  function updateRing(remaining, total) {
+    const fraction  = remaining / total;
+    const offset    = CIRCUMFERENCE * (1 - fraction);
+    $('ringFill').style.strokeDashoffset = offset;
+    $('countdownDisplay').textContent    = remaining;
+  }
+
+  // ─── Refresh logic ───────────────────────────────────────────────────────
+  // Replicates the native Tableau "Refresh data in the view" toolbar button (3rd icon).
+  // Uses datasource.refreshAsync() which is the Extensions API equivalent.
+  function refreshNow() {
+    // Reset countdown + timestamp IMMEDIATELY (synchronous — fixes stuck-at-0)
+    currentTick = intervalSecs;
+    updateRing(currentTick, intervalSecs);
+    setLastRefresh();
+    setStatus('Refreshing…');
+
+    if (!dashboard) {
+      setStatus('Not connected to Tableau.');
+      return;
+    }
+
+    dashboard.getWorksheetsAsync().then(function(sheets) {
+      if (!sheets || sheets.length === 0) {
+        setStatus('No worksheets found.');
+        return Promise.resolve();
+      }
+
+      // Gather data sources from ALL worksheets, deduplicate by name
+      return Promise.all(sheets.map(function(ws) {
+        return ws.getDataSourcesAsync().catch(function() { return []; });
+      }));
+
+    }).then(function(allSourceArrays) {
+      if (!allSourceArrays) return;
+
+      const seen = new Set();
+      const refreshPromises = [];
+
+      allSourceArrays.forEach(function(sources) {
+        (sources || []).forEach(function(ds) {
+          // Use ds.name for deduplication — ds.id can be undefined on some versions
+          const key = ds.name || ds.id || Math.random();
+          if (seen.has(key)) return;
+          seen.add(key);
+
+          refreshPromises.push(
+            ds.refreshAsync()
+              .then(function() {
+                console.log('Refreshed:', key);
+              })
+              .catch(function(err) {
+                // Show the actual error so user can see what's failing
+                console.error('refreshAsync failed for "' + key + '":', err);
+                setStatus('Error: ' + (err.message || String(err)));
+              })
+          );
+        });
+      });
+
+      if (refreshPromises.length === 0) {
+        setStatus('No data sources to refresh.');
+        return;
+      }
+
+      return Promise.all(refreshPromises);
+
+    }).then(function() {
+      // Only update status if no error was shown
+      if ($('status').textContent === 'Refreshing…') {
+        setStatus('Dashboard up to date.');
+      }
+    }).catch(function(err) {
+      setStatus('Error: ' + (err.message || String(err)));
+      console.error('Refresh error:', err);
+    });
+  }
+
+  // ─── Timer ───────────────────────────────────────────────────────────────
+  function startTimer() {
+    intervalSecs = parseInt($('intervalInput').value, 10);
+    if (isNaN(intervalSecs) || intervalSecs < 5) { intervalSecs = 5; $('intervalInput').value = 5; }
+
+    // Save setting
+    if (tableau && tableau.extensions && tableau.extensions.settings) {
+      tableau.extensions.settings.set('intervalSecs', String(intervalSecs));
+      tableau.extensions.settings.saveAsync();
+    }
+
+    currentTick = intervalSecs;
+    updateRing(currentTick, intervalSecs);
+    setBadge('running');
+    setStatus('Auto-refresh every ' + intervalSecs + 's');
+
+    if (timerHandle) clearInterval(timerHandle);
+    timerHandle = setInterval(function() {
+      currentTick--;
+      if (currentTick < 0) currentTick = 0;
+      updateRing(currentTick, intervalSecs);
+
+      if (currentTick === 0) {
+        refreshNow();
+      }
+    }, 1000);
+  }
+
+  function stopTimer() {
+    if (timerHandle) { clearInterval(timerHandle); timerHandle = null; }
+    setBadge('stopped');
+    setStatus('Auto-refresh paused.');
+  }
+
+  // ─── Tableau Extensions API init ─────────────────────────────────────────
+  tableau.extensions.initializeAsync({ configure: openConfigure })
+    .then(function() {
+      dashboard = tableau.extensions.dashboardContent.dashboard;
+
+      // Restore saved interval
+      const saved = tableau.extensions.settings.get('intervalSecs');
+      if (saved) {
+        intervalSecs = parseInt(saved, 10) || 60;
+        $('intervalInput').value = intervalSecs;
+      }
+
+      setStatus('Extension ready — auto-starting…');
+      setBadge('running');
+      startTimer();         // auto-start on load
+    })
+    .catch(function(err) {
+      setStatus('Init error: ' + err);
+      console.error('Tableau init error:', err);
+    });
+
+  // Simple inline configure handler (right-click → Configure)
+  function openConfigure() {
+    const newInterval = prompt(
+      'Enter refresh interval in seconds (minimum 5):',
+      $('intervalInput').value
+    );
+    if (newInterval !== null) {
+      $('intervalInput').value = parseInt(newInterval, 10) || 60;
+      startTimer();
+    }
+  }
+</script>
+</body>
+</html>
