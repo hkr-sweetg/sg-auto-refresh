@@ -51,3 +51,46 @@ Minimum API version — ensures compatibility with the user's version of Tableau
 
 When a Tableau Desktop user double-clicks this .trex file or loads it through the Extension panel, Tableau reads these settings and loads index.html inside the dashboard.
 Who uses it: Tableau Desktop users — they load it once when adding the extension to a dashboard, then publish the workbook. After that, it lives inside the workbook automatically.
+
+Each File Explanation
+ 
+1. Embedded URL Solution (Browser-based)
+
+This is the main approach for end users.
+
+The file embed-auto-refresh.html is a web page that users open in their browser.
+It loads the Tableau dashboard using the Tableau Embedding API (just like opening it in Tableau Online).
+On top of that, it runs a JavaScript-based auto-refresh mechanism that:
+Calls viz.refreshDataAsync() every 60 seconds
+Displays a small control panel (timer, last refresh time, start/stop, etc.)
+This ensures the dashboard is always up to date without any manual clicks.
+
+
+
+2. Tableau Extension (Inside Dashboard)
+
+This is an alternative approach within Tableau itself.
+
+The index.html file runs as a Tableau Extension (inside the dashboard).
+It refreshes data sources directly using datasource.refreshAsync().
+Users can configure refresh timing via the extension settings.
+
+
+
+3. Why Repository + GitHub Pages is Needed
+
+Both approaches rely on hosted files (HTML, JS, and .trex). Tableau cannot run these directly from a local machine or file system in a scalable way.
+
+So we need:
+
+A GitHub repository → to store all files
+GitHub Pages → to host them as a live website (public URL)
+
+Once enabled:
+
+The embedded dashboard will be accessible via a URL like:
+https://<repo-name>.github.io/...
+The .trex file will also point to this hosted URL to load the extension داخل Tableau
+4. Root Redirect (User Convenience)
+The root-redirect/index.html ensures that if someone opens the base URL, they are automatically redirected to the actual dashboard page.
+This avoids confusion and simplifies sharing a single link.
