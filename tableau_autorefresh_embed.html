@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sweetgreen – Frontline Throughput Dashboard</title>
+
+  <!-- ✅ Tableau Embedding API v3 (Web Component) -->
+  <script type="module" src="https://public.tableau.com/javascripts/api/tableau.embedding.3.latest.min.js"></script>
+
+  <style>
+    /* ─── Reset & Base ─────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #f4f5f7;
+      color: #1a1a2e;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ─── Header Bar ────────────────────────────────────────── */
+    header {
+      background: #1d2b36;
+      color: #fff;
+      padding: 14px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.25);
+    }
+    header h1 {
+      font-size: 18px;
+      font-weight: 600;
+      letter-spacing: 0.3px;
+    }
+
+    /* ─── Controls Bar ──────────────────────────────────────── */
+    .controls {
+      background: #ffffff;
+      border-bottom: 1px solid #e0e3e8;
+      padding: 12px 24px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+
+    .controls label {
+      font-size: 13px;
+      color: #555;
+      font-weight: 500;
+    }
+
+    .controls select,
+    .controls input[type="number"] {
+      font-size: 13px;
+      padding: 6px 10px;
+      border: 1px solid #d0d4dc;
+      border-radius: 6px;
+      background: #fafafa;
+      color: #333;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .controls select:focus,
+    .controls input[type="number"]:focus { border-color: #4c72f0; }
+
+    .btn {
+      padding: 7px 16px;
+      font-size: 13px;
+      font-weight: 600;
+      border: none;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+    }
+    .btn:active { transform: scale(0.97); }
+
+    .btn-primary   { background: #4c72f0; color: #fff; }
+    .btn-primary:hover   { background: #3a5ed4; }
+
+    .btn-success   { background: #28a745; color: #fff; }
+    .btn-success:hover   { background: #218838; }
+
+    .btn-danger    { background: #dc3545; color: #fff; }
+    .btn-danger:hover    { background: #c82333; }
+
+    .btn-secondary { background: #6c757d; color: #fff; }
+    .btn-secondary:hover { background: #5a6268; }
+
+    /* ─── Status Badge ──────────────────────────────────────── */
+    .status-badge {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: #555;
+    }
+    .dot {
+      width: 10px; height: 10px;
+      border-radius: 50%;
+      background: #aaa;
+      transition: background 0.3s;
+    }
+    .dot.active  { background: #28a745; animation: pulse 1.4s infinite; }
+    .dot.paused  { background: #ffc107; }
+    .dot.stopped { background: #dc3545; }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.4; }
+    }
+
+    /* ─── Progress Bar ──────────────────────────────────────── */
+    .progress-wrap {
+      background: #e9ecef;
+      height: 4px;
+      width: 100%;
+    }
+    .progress-bar {
+      height: 4px;
+      background: #4c72f0;
+      width: 0%;
+      transition: width 1s linear;
+    }
+
+    /* ─── Viz Container ─────────────────────────────────────── */
+    .viz-wrapper {
+      flex: 1;
+      padding: 20px 24px 0px 24px;
+      overflow: visible;
+    }
+
+    tableau-viz {
+      display: block;
+      width: 100%;
+      height: calc(100vh - 120px);
+      min-height: 700px;
+      border-radius: 10px;
+      overflow: visible;
+      box-shadow: 0 2px 16px rgba(0,0,0,0.12);
+    }
+
+    /* ─── Log Panel (hidden) ─────────────────────────────────── */
+    .log-panel { display: none; }
+  </style>
+</head>
+
+<body>
+
+  <!-- ═══════════════════ HEADER ═══════════════════ -->
+  <header>
+    <h1>📊 Sweetgreen – Today's Frontline Throughput</h1>
+    <span style="font-size:12px; opacity:0.7;">Tableau Embedding API v3 · Auto Refresh</span>
+  </header>
+
+  <!-- ═══════════════════ CONTROLS ═══════════════════ -->
+  <div class="controls">
+
+    <!-- Interval selector -->
+    <label for="intervalSelect">Refresh every:</label>
+    <select id="intervalSelect">
+      <option value="60" selected>1 minute</option>
+      <option value="120">2 minutes</option>
+      <option value="180">3 minutes</option>
+      <option value="300">5 minutes</option>
+      <option value="600">10 minutes</option>
+      <option value="900">15 minutes</option>
+      <option value="custom">Custom…</option>
+    </select>
+
+    <!-- Custom seconds input (hidden by default) -->
+    <input type="number" id="customSeconds" min="5" max="3600"
+           placeholder="Seconds" style="display:none; width:90px;" />
+
+    <!-- Control buttons -->
+    <button class="btn btn-success" id="btnStart">▶ Start Auto-Refresh</button>
+    <button class="btn btn-danger"  id="btnStop"  disabled>⏹ Stop</button>
+    <button class="btn btn-primary" id="btnNow">↻ Refresh Now</button>
+
+    <!-- Status badge (right-aligned) -->
+    <div class="status-badge">
+      <div class="dot stopped" id="statusDot"></div>
+      <span id="statusText">Stopped</span>
+    </div>
+
+  </div>
+
+  <!-- ═══════════════════ PROGRESS BAR ═══════════════════ -->
+  <div class="progress-wrap">
+    <div class="progress-bar" id="progressBar"></div>
+  </div>
+
+  <!-- ═══════════════════ VIZ ═══════════════════ -->
+  <div class="viz-wrapper">
+    <!--
+      🔧 CONFIGURE ME:
+         Replace the `src` attribute below with your actual Tableau dashboard URL.
+
+         Tableau Cloud example:
+           https://prod-useast-b.online.tableau.com/t/YOUR_SITE/views/YOUR_WORKBOOK/SHEET_NAME
+
+         Tableau Server example:
+           https://your-server.company.com/views/YOUR_WORKBOOK/SHEET_NAME
+
+         Optional attributes:
+           toolbar="hidden"       → hides the Tableau toolbar
+           hide-tabs              → hides the sheet tabs
+           width / height         → override dimensions
+    -->
+    <tableau-viz
+      id="tableauViz"
+      src="https://10ay.online.tableau.com/t/sweetgreen/views/TodaysFrontlineThroughput-update/TodaysFrontlineThroughput"
+      toolbar="hidden"
+      hide-tabs>
+    </tableau-viz>
+  </div>
+
+  <!-- ═══════════════════ LOG PANEL ═══════════════════ -->
+  <div class="log-panel" id="logPanel">
+    <p class="log-entry-info">[System] Tableau Embedding API v3 loaded. Configure your dashboard URL and click Start.</p>
+  </div>
+
+
+  <!-- ═══════════════════ SCRIPT ═══════════════════ -->
+  <script>
+    // ─── DOM References ───────────────────────────────────────────
+    const viz           = document.getElementById('tableauViz');
+    const btnStart      = document.getElementById('btnStart');
+    const btnStop       = document.getElementById('btnStop');
+    const btnNow        = document.getElementById('btnNow');
+    const intervalSel   = document.getElementById('intervalSelect');
+    const customInput   = document.getElementById('customSeconds');
+    const statusDot     = document.getElementById('statusDot');
+    const statusText    = document.getElementById('statusText');
+    const progressBar   = document.getElementById('progressBar');
+    const logPanel      = document.getElementById('logPanel');
+
+    // ─── State ────────────────────────────────────────────────────
+    let refreshTimer       = null;   // setInterval handle
+    let progressTimer      = null;   // setInterval for progress bar
+    let intervalSeconds    = 60;     // default interval
+    let secondsElapsed     = 0;
+    let isRefreshing       = false;
+
+    // ─── Logging Helper ───────────────────────────────────────────
+    function log(message, type = 'info') {
+      const now  = new Date().toLocaleTimeString();
+      const p    = document.createElement('p');
+      p.className = `log-entry-${type}`;
+      p.textContent = `[${now}] ${message}`;
+      logPanel.appendChild(p);
+      logPanel.scrollTop = logPanel.scrollHeight;
+    }
+
+    // ─── Status Badge Helper ──────────────────────────────────────
+    function setStatus(state, label) {
+      statusDot.className = `dot ${state}`;
+      statusText.textContent = label;
+    }
+
+    // ─── Get Selected Interval ────────────────────────────────────
+    function getIntervalSeconds() {
+      if (intervalSel.value === 'custom') {
+        const v = parseInt(customInput.value, 10);
+        return (isNaN(v) || v < 1) ? 60 : v;
+      }
+      return parseInt(intervalSel.value, 10);
+    }
+
+    // ─── Show/hide custom input ───────────────────────────────────
+    intervalSel.addEventListener('change', () => {
+      customInput.style.display = intervalSel.value === 'custom' ? 'inline-block' : 'none';
+    });
+
+    // ─── Core Refresh Logic ───────────────────────────────────────
+    function refreshDashboard() {
+      if (isRefreshing) return;
+      isRefreshing = true;
+      log('Reloading dashboard…');
+      setStatus('active', 'Reloading…');
+
+      try {
+        // Simply reload the viz by toggling the src attribute
+        const currentSrc = viz.src;
+        viz.src = '';
+        setTimeout(() => {
+          viz.src = currentSrc;
+          log('✅ Dashboard reloaded.');
+          setStatus('active', `Auto-refresh ON (every ${intervalSeconds}s)`);
+          isRefreshing = false;
+        }, 300);
+      } catch (err) {
+        log(`Reload error: ${err.message}`, 'error');
+        setStatus('paused', 'Error – see log');
+        isRefreshing = false;
+      }
+    }
+
+    // ─── Progress Bar Animation ───────────────────────────────────
+    function startProgressBar(totalSeconds) {
+      secondsElapsed = 0;
+      progressBar.style.transition = 'none';
+      progressBar.style.width = '0%';
+
+      clearInterval(progressTimer);
+      progressTimer = setInterval(() => {
+        secondsElapsed++;
+        const pct = Math.min((secondsElapsed / totalSeconds) * 100, 100);
+        progressBar.style.transition = 'width 1s linear';
+        progressBar.style.width = `${pct}%`;
+        // Update countdown in status text
+        const remaining = totalSeconds - secondsElapsed;
+        if (remaining >= 0) {
+          statusText.textContent = `Next refresh in ${remaining}s`;
+        }
+      }, 1000);
+    }
+
+    // ─── Start Auto-Refresh ───────────────────────────────────────
+    function startAutoRefresh() {
+      intervalSeconds = getIntervalSeconds();
+      log(`Auto-refresh started — interval: ${intervalSeconds}s`);
+      setStatus('active', `Auto-refresh ON (every ${intervalSeconds}s)`);
+
+      btnStart.disabled = true;
+      btnStop.disabled  = false;
+
+      // Run immediately, then on interval
+      refreshDashboard();
+      startProgressBar(intervalSeconds);
+
+      refreshTimer = setInterval(() => {
+        refreshDashboard();
+        startProgressBar(intervalSeconds);
+      }, intervalSeconds * 1000);
+    }
+
+    // ─── Stop Auto-Refresh ────────────────────────────────────────
+    function stopAutoRefresh() {
+      clearInterval(refreshTimer);
+      clearInterval(progressTimer);
+      refreshTimer = null;
+
+      progressBar.style.transition = 'none';
+      progressBar.style.width = '0%';
+
+      btnStart.disabled = false;
+      btnStop.disabled  = true;
+
+      setStatus('stopped', 'Stopped');
+      log('Auto-refresh stopped.', 'warn');
+    }
+
+    // ─── Button Listeners ─────────────────────────────────────────
+    btnStart.addEventListener('click', startAutoRefresh);
+    btnStop.addEventListener('click',  stopAutoRefresh);
+    btnNow.addEventListener('click', () => {
+      log('Manual refresh triggered.');
+      refreshDashboard();
+    });
+
+    // ─── Viz Lifecycle Events ─────────────────────────────────────
+    viz.addEventListener('firstinteractive', () => {
+      log('✅ Dashboard loaded and interactive. Ready to refresh.');
+      setStatus('paused', 'Ready');
+    });
+
+    viz.addEventListener('vizloaderror', (e) => {
+      log(`Load error: ${e.detail?.message ?? 'Unknown error'}`, 'error');
+      setStatus('stopped', 'Load Error');
+    });
+
+  </script>
+
+</body>
+</html>
