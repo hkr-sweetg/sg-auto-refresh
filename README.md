@@ -1,10 +1,13 @@
 # Sweetgreen – Tableau Auto-Refresh Embed
 
 ## About `tableau_autorefresh_embed.html`
+This is a self-contained HTML file built to embed the **Today's Frontline Throughput** Tableau dashboard directly in a browser — with automatic page refresh built in.
 
-This is a self-contained HTML file built to embed the **Sweetgreen Today's Frontline Throughput** Tableau dashboard directly in a browser — with automatic page refresh built in.
-
-### Purpose
+## About `tableau_autorefresh_embed_DS_Refresh'
+This is a self-contained HTML file built to embed the **Today's Frontline Throughput** Tableau dashboard data sources will be refreshed and retain the selected store — with automatic page refresh built in.
+## About `tableau_autorefresh_embed_Page_Refresh'
+This is a self-contained HTML file built to embed the **Today's Frontline Throughput** Tableau dashboard webpage will be refreshed (not Data source) and retain the selected store  — with automatic page refresh built in.
+**Their is a 4 seconds delay to render the page**
 
 The file solves a common operations need: keeping a Tableau dashboard visible on a screen (such as a store monitor or ops display) and ensuring it always shows the latest data without anyone manually refreshing the page.
 
